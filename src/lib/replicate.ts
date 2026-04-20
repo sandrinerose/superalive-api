@@ -1,22 +1,25 @@
 /**
- * Replicate Client — Flux Image Generation
- * ──────────────────────────────────────────
- * Sends the enhanced prompt (from Gemini) to Flux via Replicate
+ * Replicate Client — Nano Banana Pro (Google)
+ * ────────────────────────────────────────────
+ * Sends the enhanced prompt (from Gemini) to Nano Banana Pro via Replicate
  * and returns the generated image URL(s).
  *
- * - Retries up to 3 times on 429 (rate limit) with backoff
- * - Waits 10s between rate limit retries to respect 6 req/min cap
+ * - Supports multiple reference images (up to 14)
+ * - Built-in fallback to Seedream 5.0 lite on rate limits
+ * - Retries up to 3 times on 429 with backoff
  */
 
+const MODEL_ID = "google/nano-banana-pro";
 const MAX_CREATE_RETRIES = 3;
-const RATE_LIMIT_BACKOFF_MS = 12000; // 12s between retries (fits within 6 req/min)
+const RATE_LIMIT_BACKOFF_MS = 12000; // 12s between retries
 
 interface ReplicateRequest {
   prompt: string;
-  aspectRatio?: string; // e.g., "1:1", "16:9", "3:4"
-  numOutputs?: number; // 1-4
-  referenceImage?: string; // URL to a reference image
-  model?: "flux-2-dev" | "flux-2-pro" | "flux-1-schnell" | "flux-1-dev" | "flux-1-pro";
+  aspectRatio?: string; // e.g., "1:1", "16:9", "3:4", "auto"
+  numImages?: number; // 1-4
+  imageUrls?: string[]; // URLs to reference images (up to 14)
+  resolution?: "1k" | "2k" | "4k";
+  outputFormat?: "jpg" | "png";
 }
 
 interface ReplicateResponse {
@@ -25,41 +28,32 @@ interface ReplicateResponse {
   error?: string;
 }
 
-// Model identifiers on Replicate
-const MODEL_MAP: Record<string, string> = {
-  "flux-2-dev": "black-forest-labs/flux-dev",
-  "flux-2-pro": "black-forest-labs/flux-pro",
-  "flux-1-schnell": "black-forest-labs/flux-schnell",
-  "flux-1-dev": "black-forest-labs/flux-dev",
-  "flux-1-pro": "black-forest-labs/flux-pro",
-};
-
 export async function callReplicate({
   prompt,
   aspectRatio = "1:1",
-  numOutputs = 1,
-  referenceImage,
-  model,
+  numImages = 1,
+  imageUrls = [],
+  resolution = "2k",
+  outputFormat = "png",
 }: ReplicateRequest): Promise<ReplicateResponse> {
   const apiToken = process.env.REPLICATE_API_TOKEN;
   if (!apiToken) {
     return { images: [], success: false, error: "REPLICATE_API_TOKEN not configured" };
   }
 
-  const selectedModel = model || process.env.FLUX_MODEL || "flux-2-dev";
-  const modelId = MODEL_MAP[selectedModel] || MODEL_MAP["flux-2-dev"];
-
   const input: any = {
     prompt,
     aspect_ratio: aspectRatio,
-    num_outputs: numOutputs,
-    output_format: "png",
-    output_quality: 90,
+    num_images: numImages,
+    output_format: outputFormat,
+    resolution,
+    safety_tolerance: 5,
+    allow_fallback_model: true, // Falls back to Seedream 5.0 lite if rate limited
   };
 
-  // Add reference image if provided (for image-to-image workflows)
-  if (referenceImage) {
-    input.image = referenceImage;
+  // Add reference images if provided (Nano Banana Pro supports up to 14)
+  if (imageUrls.length > 0) {
+    input.image_urls = imageUrls;
   }
 
   try {
@@ -73,7 +67,7 @@ export async function callReplicate({
         await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_BACKOFF_MS));
       }
 
-      createResponse = await fetch(`https://api.replicate.com/v1/models/${modelId}/predictions`, {
+      createResponse = await fetch(`https://api.replicate.com/v1/models/${MODEL_ID}/predictions`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiToken}`,
@@ -118,7 +112,7 @@ export async function callReplicate({
 async function pollPrediction(
   predictionId: string,
   apiToken: string,
-  maxAttempts = 60,
+  maxAttempts = 90,
   intervalMs = 2000
 ): Promise<string[] | null> {
   for (let i = 0; i < maxAttempts; i++) {

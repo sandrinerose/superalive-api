@@ -4,8 +4,9 @@
  * Every workflow follows the same pattern:
  * 1. Parse request (prompt + images)
  * 2. Call Gemini with system prompt
- * 3. Call Replicate with enhanced prompt
- * 4. Return generated images
+ * 3. Upload ALL reference images to Replicate
+ * 4. Call Nano Banana Pro with enhanced prompt + image URLs
+ * 5. Return generated images
  *
  * This shared handler eliminates duplication across all 11 endpoints.
  */
@@ -23,6 +24,7 @@ export interface WorkflowConfig {
   minImages?: number;
   maxImages?: number;
   outputFormat?: "json" | "raw"; // Whether Gemini outputs JSON or raw text
+  defaultResolution?: "1k" | "2k" | "4k";
 }
 
 export async function handleWorkflow(
@@ -46,7 +48,7 @@ export async function handleWorkflow(
       imageMediaTypes = [],
       aspectRatio,
       candidates,
-      model,
+      resolution,
     } = body;
 
     // Validate prompt
@@ -82,36 +84,42 @@ export async function handleWorkflow(
       try {
         // Clean up markdown code blocks if present
         const cleanedText = imagePrompt
-          .replace(/```json\n?/g, "")
-          .replace(/```\n?/g, "")
+          .replace(/\`\`\`json\n?/g, "")
+          .replace(/\`\`\`\n?/g, "")
           .trim();
         const parsed = JSON.parse(cleanedText);
-        // Use the full JSON as the prompt — Flux handles detailed prompts well
+        // Use the full JSON as the prompt — Nano Banana Pro handles detailed prompts well
         imagePrompt = JSON.stringify(parsed);
       } catch {
         // If JSON parsing fails, use the raw text — it's usually still usable
       }
     }
 
-    // ─── Step 3: Upload reference images to Replicate ───
-    let referenceImageUrl: string | undefined;
+    // ─── Step 3: Upload ALL reference images to Replicate ──
+    const uploadedImageUrls: string[] = [];
     if (images.length > 0) {
-      const uploaded = await uploadImageToReplicate(
-        images[0],
-        imageMediaTypes[0] || "image/jpeg"
-      );
-      if (uploaded) {
-        referenceImageUrl = uploaded;
+      console.log(`Uploading ${images.length} reference image(s) to Replicate...`);
+      for (let i = 0; i < images.length; i++) {
+        const uploaded = await uploadImageToReplicate(
+          images[i],
+          imageMediaTypes[i] || "image/jpeg"
+        );
+        if (uploaded) {
+          uploadedImageUrls.push(uploaded);
+        } else {
+          console.warn(`Failed to upload image ${i + 1}/${images.length}`);
+        }
       }
+      console.log(`Successfully uploaded ${uploadedImageUrls.length}/${images.length} images`);
     }
 
-    // ─── Step 4: Call Replicate for image generation ────
+    // ─── Step 4: Call Nano Banana Pro for image generation ──
     const replicateResult = await callReplicate({
       prompt: imagePrompt,
       aspectRatio: aspectRatio || config.defaultAspectRatio || "1:1",
-      numOutputs: candidates || config.defaultCandidates || 1,
-      referenceImage: referenceImageUrl,
-      model: model,
+      numImages: candidates || config.defaultCandidates || 1,
+      imageUrls: uploadedImageUrls,
+      resolution: resolution || config.defaultResolution || "2k",
     });
 
     if (!replicateResult.success) {
@@ -125,6 +133,7 @@ export async function handleWorkflow(
       images: replicateResult.images,
       enhancedPrompt: imagePrompt,
       candidateCount: replicateResult.images.length,
+      model: geminiResult.model || "gemini-2.5-pro",
     });
   } catch (err: any) {
     return errorResponse(`Workflow error: ${err.message}`, 500);

@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     defaultCandidates: 4,
     requiresImages: true,
     minImages: 1,
-    maxImages: 2,
+    maxImages: 6,
     outputFormat,
   });
 }

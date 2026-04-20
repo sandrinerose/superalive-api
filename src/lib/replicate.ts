@@ -65,7 +65,7 @@ export async function callReplicate({
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ input }),
-      }),
+    
     });
 
     if (!createResponse.ok) {

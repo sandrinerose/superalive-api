@@ -18,7 +18,7 @@ interface ReplicateRequest {
   aspectRatio?: string; // e.g., "1:1", "16:9", "3:4", "auto"
   numImages?: number; // 1-4
   imageUrls?: string[]; // URLs to reference images (up to 14)
-  resolution?: "1k" | "2k" | "4k";
+  resolution?: "1K" | "2K" | "4K";
   outputFormat?: "jpg" | "png";
 }
 
@@ -33,7 +33,7 @@ export async function callReplicate({
   aspectRatio = "1:1",
   numImages = 1,
   imageUrls = [],
-  resolution = "2k",
+  resolution = "2K",
   outputFormat = "png",
 }: ReplicateRequest): Promise<ReplicateResponse> {
   const apiToken = process.env.REPLICATE_API_TOKEN;
@@ -41,12 +41,15 @@ export async function callReplicate({
     return { images: [], success: false, error: "REPLICATE_API_TOKEN not configured" };
   }
 
+  // Ensure resolution is uppercase (Replicate requires "1K", "2K", "4K")
+  const normalizedResolution = resolution.toUpperCase();
+
   const input: any = {
     prompt,
     aspect_ratio: aspectRatio,
     num_images: numImages,
     output_format: outputFormat,
-    resolution,
+    resolution: normalizedResolution,
     safety_tolerance: 5,
     allow_fallback_model: true, // Falls back to Seedream 5.0 lite if rate limited
   };

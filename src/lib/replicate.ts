@@ -58,15 +58,13 @@ export async function callReplicate({
 
   try {
     // Create prediction
-    const createResponse = await fetch("https://api.replicate.com/v1/predictions", {
+    const createResponse = await fetch(`https://api.replicate.com/v1/models/${modelId}/predictions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: modelId,
-        input,
+      body: JSON.stringify({ input }),
       }),
     });
 

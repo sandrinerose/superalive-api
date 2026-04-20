@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     defaultAspectRatio: body.aspectRatio || "1:1",
     defaultCandidates: 4,
     requiresImages: false, // Optional for this workflow
-    maxImages: 4,
+    maxImages: 8,
     outputFormat: hasImages ? "json" : "raw",
   });
 }

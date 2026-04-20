@@ -5,7 +5,7 @@
  * and returns the enhanced prompt for image generation.
  */
 
-const GEMINI_API_URL = "https://generativelanguage.googleais.com/v1beta/models/gemini-2.5-pro:generateContent";
+const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent";
 
 interface GeminiRequest {
   systemPrompt: string;

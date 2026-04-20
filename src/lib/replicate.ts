@@ -3,6 +3,194 @@
  * ──────────────────────────────────────────
  * Sends the enhanced prompt (from Gemini) to Flux via Replicate
  * and returns the generated image URL(s).
+ *
+ * - Retries up to 3 times on 429 (rate limit) with backoff
+ * - Waits 10s between rate limit retries to respect 6 req/min cap
+ */
+
+const MAX_CREATE_RETRIES = 3;
+const RATE_LIMIT_BACKOFF_MS = 12000; // 12s between retries (fits within 6 req/min)
+
+interface ReplicateRequest {
+  prompt: string;
+  aspectRatio?: string; // e.g., "1:1", "16:9", "3:4"
+  numOutputs?: number; // 1-4
+  referenceImage?: string; // URL to a reference image
+  model?: "flux-2-dev" | "flux-2-pro" | "flux-1-schnell" | "flux-1-dev" | "flux-1-pro";
+}
+
+interface ReplicateResponse {
+  images: string[]; // URLs of generated images
+  success: boolean;
+  error?: string;
+}
+
+// Model identifiers on Replicate
+const MODEL_MAP: Record<string, string> = {
+  "flux-2-dev": "black-forest-labs/flux-dev",
+  "flux-2-pro": "black-forest-labs/flux-pro",
+  "flux-1-schnell": "black-forest-labs/flux-schnell",
+  "flux-1-dev": "black-forest-labs/flux-dev",
+  "flux-1-pro": "black-forest-labs/flux-pro",
+};
+
+export async function callReplicate({
+  prompt,
+  aspectRatio = "1:1",
+  numOutputs = 1,
+  referenceImage,
+  model,
+}: ReplicateRequest): Promise<ReplicateResponse> {
+  const apiToken = process.env.REPLICATE_API_TOKEN;
+  if (!apiToken) {
+    return { images: [], success: false, error: "REPLICATE_API_TOKEN not configured" };
+  }
+
+  const selectedModel = model || process.env.FLUX_MODEL || "flux-2-dev";
+  const modelId = MODEL_MAP[selectedModel] || MODEL_MAP["flux-2-dev"];
+
+  const input: any = {
+    prompt,
+    aspect_ratio: aspectRatio,
+    num_outputs: numOutputs,
+    output_format: "png",
+    output_quality: 90,
+  };
+
+  // Add reference image if provided (for image-to-image workflows)
+  if (referenceImage) {
+    input.image = referenceImage;
+  }
+
+  try {
+    // Create prediction with retry on rate limit
+    let createResponse: Response | null = null;
+    let lastError = "";
+
+    for (let attempt = 0; attempt <= MAX_CREATE_RETRIES; attempt++) {
+      if (attempt > 0) {
+        console.log(`Replicate rate limited, retry ${attempt}/${MAX_CREATE_RETRIES} after ${RATE_LIMIT_BACKOFF_MS}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_BACKOFF_MS));
+      }
+
+      createResponse = await fetch(`https://api.replicate.com/v1/models/${modelId}/predictions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ input }),
+      });
+
+      // Success or non-rate-limit error — stop retrying
+      if (createResponse.ok || createResponse.status !== 429) {
+        break;
+      }
+
+      // 429 rate limit — will retry
+      lastError = await createResponse.text();
+      console.log(`Replicate 429: ${lastError.substring(0, 100)}`);
+    }
+
+    if (!createResponse || !createResponse.ok) {
+      const errorText = lastError || (createResponse ? await createResponse.text() : "No response");
+      return {
+        images: [],
+        success: false,
+        error: `Replicate create error (${createResponse?.status || "unknown"}): ${errorText}`,
+      };
+    }
+
+    const prediction = await createResponse.json();
+
+    // Poll for completion
+    const resultImages = await pollPrediction(prediction.id, apiToken);
+    if (!resultImages) {
+      return { images: [], success: false, error: "Replicate prediction timed out or failed" };
+    }
+
+    return { images: resultImages, success: true };
+  } catch (err: any) {
+    return { images: [], success: false, error: `Replicate request failed: ${err.message}` };
+  }
+}
+
+async function pollPrediction(
+  predictionId: string,
+  apiToken: string,
+  maxAttempts = 60,
+  intervalMs = 2000
+): Promise<string[] | null> {
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+
+    const response = await fetch(
+      `https://api.replicate.com/v1/predictions/${predictionId}`,
+      {
+        headers: { Authorization: `Bearer ${apiToken}` },
+      }
+    );
+
+    if (!response.ok) continue;
+
+    const data = await response.json();
+
+    if (data.status === "succeeded") {
+      const output = data.output;
+      if (Array.isArray(output)) return output;
+      if (typeof output === "string") return [output];
+      return null;
+    }
+
+    if (data.status === "failed" || data.status === "canceled") {
+      console.error("Replicate prediction failed:", data.error);
+      return null;
+    }
+
+    // Still processing — continue polling
+  }
+
+  return null; // Timed out
+}
+
+/**
+ * Upload a base64 image to a temporary URL that Replicate can access.
+ * Uses Replicate's file upload API.
+ */
+export async function uploadImageToReplicate(
+  base64Data: string,
+  mediaType: string = "image/jpeg"
+): Promise<string | null> {
+  const apiToken = process.env.REPLICATE_API_TOKEN;
+  if (!apiToken) return null;
+
+  try {
+    // Convert base64 to buffer
+    const buffer = Buffer.from(base64Data, "base64");
+
+    // Create upload
+    const createResponse = await fetch("https://api.replicate.com/v1/files", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        "Content-Type": mediaType,
+      },
+      body: buffer,
+    });
+
+    if (!createResponse.ok) return null;
+
+    const data = await createResponse.json();
+    return data.urls?.get || null;
+  } catch {
+    return null;
+  }
+}
+/**
+ * Replicate Client — Flux Image Generation
+ * ──────────────────────────────────────────
+ * Sends the enhanced prompt (from Gemini) to Flux via Replicate
+ * and returns the generated image URL(s).
  */
 
 interface ReplicateRequest {

@@ -51,8 +51,8 @@ export async function POST(request: Request) {
         const replicate = await callReplicate({
           prompt: gemini.text,
           aspectRatio: ratio,
-          numOutputs: 1,
-          referenceImage: refUrl || undefined,
+          numImages: 1,
+          imageUrls: refUrl ? [refUrl] : undefined,
         });
 
         if (!replicate.success) return { ratio, image: null, error: replicate.error };

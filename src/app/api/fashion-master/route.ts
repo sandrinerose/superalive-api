@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     name: `Fashion Master (${mode})`,
     systemPrompt,
     defaultAspectRatio: aspectRatio,
-    defaultCandidates: 4,
+    defaultCandidates: 2,
     requiresImages: true,
     minImages: 1,
     maxImages: 6,

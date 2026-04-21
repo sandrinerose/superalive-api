@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     name: `Variations (${mode})`,
     systemPrompt,
     defaultAspectRatio: "1:1",
-    defaultCandidates: 4,
+    defaultCandidates: 2,
     requiresImages: true,
     minImages: 1,
     maxImages: 6,

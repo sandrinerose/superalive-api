@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     name: "Product Integration",
     systemPrompt: PRODUCT_INTEGRATION,
     defaultAspectRatio: "1:1",
-    defaultCandidates: 4,
+    defaultCandidates: 2,
     requiresImages: true,
     minImages: 2,
     maxImages: 6,

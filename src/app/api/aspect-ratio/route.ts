@@ -34,6 +34,10 @@ export async function POST(request: Request) {
     // Upload reference image once
     const refUrl = await uploadImageToReplicate(images[0], imageMediaTypes[0] || "image/jpeg");
 
+    // Limit images sent to Gemini to first 2 to prevent timeouts
+    const geminiImages = images.slice(0, 2);
+    const geminiMediaTypes = imageMediaTypes.slice(0, 2);
+
     // Run all ratios in parallel
     const results = await Promise.all(
       validRatios.map(async (ratio: string) => {
@@ -41,8 +45,8 @@ export async function POST(request: Request) {
         const gemini = await callGemini({
           systemPrompt: COMPOSITION_EXPERT,
           userPrompt: `${prompt}\nTarget aspect ratio: ${ratio}`,
-          images,
-          imageMediaTypes,
+          images: geminiImages,
+          imageMediaTypes: geminiMediaTypes,
         });
 
         if (!gemini.success) return { ratio, image: null, error: gemini.error };

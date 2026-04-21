@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     name: "Body Grid",
     systemPrompt: COMMERCIAL_CONSISTENCY,
     defaultAspectRatio: "16:9",
-    defaultCandidates: 4,
+    defaultCandidates: 2,
     requiresImages: true,
     minImages: 1,
     maxImages: 1,

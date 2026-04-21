@@ -65,11 +65,16 @@ export async function handleWorkflow(
     }
 
     // ─── Step 1: Call Gemini with system prompt ─────────
+    // Limit images sent to Gemini to the first 2 (prompt enhancement
+    // doesn't need every reference image, and large payloads cause timeouts)
+    const geminiImages = images.slice(0, 2);
+    const geminiMediaTypes = imageMediaTypes.slice(0, 2);
+
     const geminiResult = await callGemini({
       systemPrompt: config.systemPrompt,
       userPrompt: prompt || "Process the provided image(s)",
-      images,
-      imageMediaTypes,
+      images: geminiImages,
+      imageMediaTypes: geminiMediaTypes,
     });
 
     if (!geminiResult.success) {
@@ -84,8 +89,8 @@ export async function handleWorkflow(
       try {
         // Clean up markdown code blocks if present
         const cleanedText = imagePrompt
-          .replace(/\`\`\`json\n?/g, "")
-          .replace(/\`\`\`\n?/g, "")
+          .replace(/```json\n?/g, "")
+          .replace(/```\n?/g, "")
           .trim();
         const parsed = JSON.parse(cleanedText);
         // Use the full JSON as the prompt — Nano Banana Pro handles detailed prompts well

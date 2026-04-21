@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     name: "Sketch to Render",
     systemPrompt: VISUAL_RENDERING_ARCHITECT,
     defaultAspectRatio: "1:1",
-    defaultCandidates: 4,
+    defaultCandidates: 2,
     requiresImages: true,
     minImages: 1,
     maxImages: 4,

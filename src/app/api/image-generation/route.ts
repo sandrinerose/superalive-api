@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     name: "Image Generation",
     systemPrompt: hasImages ? DIRECTOR_OF_PHOTOGRAPHY : DREAMWEAVER,
     defaultAspectRatio: body.aspectRatio || "1:1",
-    defaultCandidates: 4,
+    defaultCandidates: 2,
     requiresImages: false, // Optional for this workflow
     maxImages: 8,
     outputFormat: hasImages ? "json" : "raw",

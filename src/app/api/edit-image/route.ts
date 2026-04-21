@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     name: "Edit Image",
     systemPrompt: IMAGE_EDITING_OPTIMIZER,
     defaultAspectRatio: "1:1",
-    defaultCandidates: 4,
+    defaultCandidates: 2,
     requiresImages: true,
     minImages: 1,
     maxImages: 4,

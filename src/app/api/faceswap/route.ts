@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     name: "Faceswap",
     systemPrompt: IDENTITY_SYNTHESIS,
     defaultAspectRatio: "1:1",
-    defaultCandidates: 4,
+    defaultCandidates: 2,
     requiresImages: true,
     minImages: 2,
     maxImages: 4,
